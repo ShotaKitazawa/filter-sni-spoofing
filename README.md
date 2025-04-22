@@ -2,7 +2,7 @@
 
 filter-sni-spoofing is a Proxy-Wasm standard filter.
 
-filter-sni-spoofing reads the destination IP address and SNI for packets, and denies if destination IP address is not matched to the address resolved by SNI.
+filter-sni-spoofing obtains the destination IP address and SNI for packets, and denies if destination IP address is not matched to the address resolved from SNI.
 
 ## Background / Motivation
 
@@ -90,7 +90,7 @@ Please confirm the [envoy.yaml](./example/envoy/envoy.yaml) in example directory
 
 ## How it works
 
-filter-sni-spoofing reads the destination IP address and SNI for packets, and denies if destination IP address is not matched to the address resolved by SNI.
+filter-sni-spoofing obtains the destination IP address and SNI for packets, and denies if destination IP address is not matched to the address resolved from SNI.
 
 ```mermaid
 flowchart TD
@@ -109,8 +109,8 @@ flowchart TD
 
     verify_sni{Verify if destination IP contains in the result of the DNS query}
     follow_failure_policy[Follow the failure policy]
-    resume[close TCP connection]
-    close["resume TCP connection (in other words, allow transport)"]
+    resume["resume TCP connection (in other words, allow transport)"]
+    close[close TCP connection]
 ```
 
 ### Request to DNS over HTTPS (DoH) Server
@@ -134,7 +134,7 @@ Default is failed.
 
 Please check the flowchart to see in which cases the Failure Policy is to be observed.
 
-### Cache
+### Caching
 
 filter-sni-spoofing caches the result of DNS query.
 The TTL of the DoH server response is used as the TTL of the cache.
