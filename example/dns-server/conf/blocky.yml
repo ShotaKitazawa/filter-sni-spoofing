@@ -1,0 +1,24 @@
+ports:
+  dns: 0
+  https: 8443
+
+certFile: "/etc/certs/server.crt"
+keyFile: "/etc/certs/server.key"
+
+upstreams:
+  groups:
+    default:
+      - "127.0.0.1"
+
+caching:
+  minTime: 1m
+
+### to response .local domain
+specialUseDomains:
+  enable: false
+
+### hosts file is read in dnsmasq
+#hostsFile:
+#  sources:
+#    - /etc/hosts
+#    - /etc/conf/hosts.dnsmasq

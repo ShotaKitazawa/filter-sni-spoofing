@@ -1,0 +1,4 @@
+10.1.0.1 s1.local
+10.1.0.1 s1-deny.local
+10.2.0.1 s2.local
+10.254.0.2 dns-server.local

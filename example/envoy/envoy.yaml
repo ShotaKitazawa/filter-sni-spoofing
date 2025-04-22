@@ -1,0 +1,106 @@
+static_resources:
+  listeners:
+    - name: listener_transparent
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 15001 # packets will be redirected by iptables
+      listener_filters:
+        - name: envoy.filters.listener.tls_inspector
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.listener.tls_inspector.v3.TlsInspector
+        - name: envoy.filters.listener.original_dst
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.listener.original_dst.v3.OriginalDst
+      filter_chains:
+        - filter_chain_match:
+            server_names:
+              - "s1.local"
+          filters:
+            ### configuration for filter-sni-spoofing ###
+            - name: envoy.filters.network.wasm
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.wasm.v3.Wasm
+                config:
+                  name: filter_sni_spoofing
+                  root_id: filter_sni_spoofing
+                  configuration:
+                    "@type": type.googleapis.com/google.protobuf.StringValue
+                    value: |
+                      {
+                        "dns_server_cluster_name": "dns_resolver_cluster",
+                        "dns_server_hostname": "dns-server.local:8443",
+                        "failure_policy": "Fail"
+                      }
+                  vm_config:
+                    runtime: "envoy.wasm.runtime.v8"
+                    code:
+                      local:
+                        filename: "/etc/envoy/wasm/filter_sni_spoofing.wasm"
+
+            - name: envoy.filters.network.tcp_proxy
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
+                stat_prefix: tcp
+                cluster: original-destination
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+
+        # default deny
+        - filters:
+            - name: envoy.filters.network.tcp_proxy
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
+                stat_prefix: reject
+                cluster: blackhole
+
+  clusters:
+    - name: original-destination
+      type: ORIGINAL_DST
+      connect_timeout: 5s
+      lb_policy: CLUSTER_PROVIDED
+      upstream_connection_options:
+        tcp_keepalive: {}
+
+    - name: blackhole
+      type: STATIC
+      connect_timeout: 1s
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: blackhole
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: 127.0.0.1
+                      port_value: 1  # Any port not listening
+
+    # cluster for DNS over HTTPS server
+    - name: dns_resolver_cluster
+      type: LOGICAL_DNS
+      dns_lookup_family: V4_ONLY
+      dns_refresh_rate: 5s
+      connect_timeout: 0.25s
+      load_assignment:
+        cluster_name: dns_resolver_cluster
+        endpoints:
+        - lb_endpoints:
+          - endpoint:
+              address:
+                socket_address:
+                  address: dns-server.local
+                  port_value: 8443
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+
+admin:
+  address:
+    socket_address:
+      protocol: TCP
+      address: 127.0.0.1
+      port_value: 9901

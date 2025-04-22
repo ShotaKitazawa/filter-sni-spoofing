@@ -1,0 +1,66 @@
+
+nodes:
+  - name: P1
+    image: local/envoy
+    interfaces:
+      - { name: net0, type: direct, args: C1#net0 }
+      - { name: net1, type: direct, args: S1#net0 }
+      - { name: net2, type: direct, args: S2#net0 }
+      - { name: net3, type: direct, args: dns-server#net0 }
+  - name: C1
+    image: local/client
+    interfaces:
+      - { name: net0, type: direct, args: P1#net0 }
+  - name: S1
+    image: local/server
+    interfaces: [ { name: net0, type: direct, args: P1#net1 } ]
+  - name: S2
+    image: local/server
+    interfaces: [ { name: net0, type: direct, args: P1#net2 } ]
+  - name: dns-server
+    image: local/dns-server
+    interfaces:
+      - { name: net0, type: direct, args: P1#net3 }
+
+node_configs:
+  - name: P1
+    cmds:
+      - cmd: ip addr add 10.0.0.1/24 dev net0
+      - cmd: ip addr add 10.1.0.254/24 dev net1
+      - cmd: ip addr add 10.2.0.254/24 dev net2
+      - cmd: ip addr add 10.254.0.1/24 dev net3
+      - cmd: sh -c "echo 'nameserver 10.254.0.2' > /etc/resolv.conf"
+      - cmd: iptables-legacy -t nat -A PREROUTING -p tcp -m tcp --dport 80 -j DNAT --to-destination 10.0.0.1:15001
+      - cmd: iptables-legacy -t nat -A PREROUTING -p tcp -m tcp --dport 443 -j DNAT --to-destination 10.0.0.1:15001
+  - name: C1
+    cmds:
+      - cmd: ip addr add 10.0.0.2/24 dev net0
+      - cmd: ip route add default via 10.0.0.1
+  - name: S1
+    cmds:
+      - cmd: ip addr add 10.1.0.1/24 dev net0
+      - cmd: ip route add default via 10.1.0.254
+      - cmd: sh -c "cat /etc/hostname > index.html"
+      - cmd: nohup python3 -m http.server 80 &
+  - name: S2
+    cmds:
+      - cmd: ip addr add 10.2.0.1/24 dev net0
+      - cmd: ip route add default via 10.2.0.254
+      - cmd: sh -c "cat /etc/hostname > index.html"
+      - cmd: nohup python3 -m http.server 80 &
+  - name: dns-server
+    cmds:
+      - cmd: ip addr add 10.254.0.2/24 dev net0
+
+
+test:
+  - name: p2p
+    cmds:
+    # Request to s1.local will be SUCCEEDED
+    - cmd: bash -c "  docker exec C1 sh -c 'echo 10.1.0.1 s1.local      > /etc/hosts; curl -sS https://s1.local'"
+    # Request to s1-deny.local will be DENIED by envoy (not allowed destination SNI)
+    - cmd: bash -c "! docker exec C1 sh -c 'echo 10.1.0.1 s1-deny.local > /etc/hosts; curl -sS https://s1-deny.local'"
+    # Request to s2.local will be DENIED by envoy (not allowed destination SNI)
+    - cmd: bash -c "! docker exec C1 sh -c 'echo 10.2.0.1 s2.local      > /etc/hosts; curl -sS https://s2.local'"
+    # Request to s1.local, which is resolved to 10.2.0.1 by /etc/hosts in client, will be DENIED by WASM filter (spoofed SNI)
+    - cmd: bash -c "! docker exec C1 sh -c 'echo 10.2.0.1 s1.local      > /etc/hosts; curl -sS https://s1.local'"
