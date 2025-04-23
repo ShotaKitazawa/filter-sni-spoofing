@@ -1,8 +1,6 @@
 # filter-sni-spoofing
 
-filter-sni-spoofing is a Proxy-Wasm standard filter.
-
-filter-sni-spoofing obtains the destination IP address and SNI for packets, and denies if destination IP address is not matched to the address resolved from SNI.
+filter-sni-snooping is Proxy-Wasm filter to deny packets if destination IP address is not matched to the address resolved from SNI.
 
 ## Background / Motivation
 
@@ -80,17 +78,15 @@ echo "1.2.3.4 s1.local" >> /etc/hosts
 curl -k https://s1.local 
 ```
 
-To solve the above problem, Proxy-Wasm compliant filter is needed that resolves the SNI of the packet by name and rejects forwarding if it does not match the destination IP address.
+filter-sni-spoofing, which is the Proxy-Wasm filter, solves the above problem by resolving the SNI of the packet and denying one if it does not match the destination IP address.
 
 ## Usage
 
 Confirmed to work only with Envoy.
 
-Please confirm the [envoy.yaml](./example/envoy/envoy.yaml) in example directory.
+Please refer the [envoy.yaml](./example/envoy/envoy.yaml) in example directory.
 
 ## How it works
-
-filter-sni-spoofing obtains the destination IP address and SNI for packets, and denies if destination IP address is not matched to the address resolved from SNI.
 
 ```mermaid
 flowchart TD
